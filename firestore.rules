@@ -1,0 +1,53 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if user is an admin
+    function isAdmin() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // CRITICAL: Allow admins to read their own profile for role verification
+    // Taju (Super Admin) can update/delete. Abdi can create. Admins can read.
+    match /admins/{adminId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() || (isAuthenticated() && request.auth.token.email == "abdi@gmail.com");
+      allow update, delete: if isAuthenticated() && request.auth.token.email == "taju@gmail.com";
+    }
+
+    // Public Content: Everyone can read, only Admins can write
+    match /courses/{courseId} { allow read: if true; allow write: if isAuthenticated(); }
+    match /announcements/{announcementId} { allow read: if true; allow write: if isAuthenticated(); }
+    match /news/{newsId} { allow read: if true; allow write: if isAuthenticated(); }
+    match /gallery/{imageId} { allow read: if true; allow write: if isAuthenticated(); }
+
+    // Student Registration Requests: Public can create, only Admins can manage
+    // REQUIRED for the new "Register" feature
+    match /student_requests/{requestId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Registration Data: Public can CREATE, only Admins can READ/UPDATE/DELETE
+    match /students/{studentId} {
+      allow read: if isAuthenticated();
+      allow create: if true; // Allows public registration
+      allow update, delete: if isAuthenticated();
+    }
+    match /registrations/{registrationId} {
+      allow read: if isAuthenticated();
+      allow create: if true; // Allows public registration
+      allow update, delete: if isAuthenticated();
+    }
+    
+    // Protected Data: Only Admins can access
+    match /notifications/{notificationId} { allow read, write: if isAuthenticated(); }
+    match /payments/{paymentId} { allow read, write: if isAuthenticated(); }
+  }
+}
